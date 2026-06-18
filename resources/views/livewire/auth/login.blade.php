@@ -12,7 +12,7 @@
                 </svg>
             </div>
             <div class="mb-5">
-                <h2 class="color-900 text-center">Task Management Test</h2>
+                <h2 class="color-900 text-center">Task Management</h2>
             </div>
             <!-- Image block -->
             <div class="">
