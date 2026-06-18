@@ -84,7 +84,7 @@ jobs:
         server: ${{ secrets.FTP_HOST }}
         username: ${{ secrets.FTP_USER }}
         password: ${{ secrets.FTP_PASSWORD }}
-        server-dir: /task.digistat.shop/
+        server-dir: /
         exclude: |
           **/.git*
           **/.github*
