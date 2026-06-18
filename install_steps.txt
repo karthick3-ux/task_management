@@ -1,0 +1,692 @@
+# Laravel 11 Task Management - HostitBro Server Setup
+
+## 1. Initial Project Setup
+
+### Create Laravel 11 Project (Local Development)
+```bash
+composer create-project laravel/laravel task-management
+cd task-management
+```
+
+### Environment Configuration
+```bash
+# Copy environment file
+cp .env.example .env
+
+# Generate application key
+php artisan key:generate
+```
+
+## 2. Server Requirements & Configuration
+
+### Server Requirements
+- PHP 8.2 or higher
+- MySQL 8.0 or MariaDB 10.3+
+- Composer 2.x
+- Node.js 18+ (for asset compilation)
+- Git
+
+### Check Server PHP Configuration
+```bash
+# SSH into your HostitBro server
+ssh username@your-server-ip
+
+# Check PHP version and extensions
+php -v
+php -m | grep -E "(mysql|pdo|mbstring|xml|zip|gd|curl|json)"
+
+# Check if required extensions are installed
+php -r "echo 'Extensions: ' . implode(', ', get_loaded_extensions());"
+```
+
+## 3. Debug & Performance Monitoring (Shared Hosting Optimized)
+
+### Install Debug Packages
+```bash
+# Essential debugging tools for shared hosting
+composer require --dev barryvdh/laravel-debugbar
+composer require --dev barryvdh/laravel-ide-helper
+composer require spatie/laravel-ray --dev
+
+# Lightweight performance monitoring
+composer require itsgoingd/clockwork --dev
+composer require spatie/laravel-query-detector --dev
+```
+
+### Configure Debug Tools for Production-Safe Usage
+
+#### config/debugbar.php
+```php
+<?php
+return [
+    'enabled' => env('DEBUGBAR_ENABLED', false),
+    'except' => [
+        'telescope*',
+        'horizon*',
+    ],
+    'storage' => [
+        'enabled' => true,
+        'driver' => 'file',
+        'path' => storage_path('debugbar'),
+        'connection' => null,
+        'provider' => '',
+        'hostname' => '127.0.0.1',
+        'port' => 2304,
+    ],
+    'include_vendors' => true,
+    'capture_ajax' => true,
+    'add_ajax_timing' => false,
+    'collectors' => [
+        'phpinfo' => false,  // Disable for security
+        'messages' => true,
+        'time' => true,
+        'memory' => true,
+        'exceptions' => true,
+        'log' => true,
+        'db' => true,
+        'views' => true,
+        'route' => true,
+        'auth' => false,  // Disable in production
+        'gate' => true,
+        'session' => false,  // Disable in production
+        'symfony_request' => true,
+        'mail' => true,
+        'laravel' => true,
+        'events' => false,  // Can be heavy
+        'default_request' => false,
+        'logs' => false,
+        'files' => false,
+        'config' => false,  // Disable for security
+        'cache' => false,
+    ],
+];
+```
+
+### Simple Performance Monitoring Middleware
+```php
+<?php
+// app/Http/Middleware/PerformanceMonitor.php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+
+class PerformanceMonitor
+{
+    public function handle(Request $request, Closure $next)
+    {
+        $start = microtime(true);
+        $memory = memory_get_usage();
+        
+        $response = $next($request);
+        
+        $executionTime = microtime(true) - $start;
+        $memoryUsed = memory_get_usage() - $memory;
+        
+        // Log slow requests (> 2 seconds)
+        if ($executionTime > 2) {
+            Log::warning('Slow request detected', [
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'execution_time' => round($executionTime, 2) . 's',
+                'memory_used' => round($memoryUsed / 1024 / 1024, 2) . 'MB',
+                'user_id' => auth()->id(),
+            ]);
+        }
+        
+        return $response;
+    }
+}
+```
+
+## 4. Code Quality & Testing
+
+### Install Testing & Quality Tools
+```bash
+composer require --dev phpunit/phpunit
+composer require --dev pestphp/pest
+composer require --dev pestphp/pest-plugin-laravel
+
+# Code quality tools
+composer require --dev friendsofphp/php-cs-fixer
+composer require --dev phpstan/phpstan
+composer require --dev larastan/larastan
+```
+
+### PHPStan Configuration (phpstan.neon)
+```neon
+includes:
+    - ./vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app/
+
+    level: 5  # Lower level for shared hosting compatibility
+
+    ignoreErrors:
+        - '#PHPDoc tag @var#'
+        - '#Access to an undefined property#'
+
+    excludePaths:
+        - ./*/*/FileToBeExcluded.php
+
+    checkMissingIterableValueType: false
+    reportUnmatchedIgnoredErrors: false
+```
+
+### PHP CS Fixer Configuration (.php-cs-fixer.php)
+```php
+<?php
+
+$finder = PhpCsFixer\Finder::create()
+    ->in(__DIR__)
+    ->exclude('bootstrap')
+    ->exclude('storage')
+    ->exclude('vendor')
+    ->exclude('node_modules')
+    ->name('*.php')
+    ->notName('*.blade.php')
+    ->ignoreDotFiles(true)
+    ->ignoreVCS(true);
+
+$config = new PhpCsFixer\Config();
+return $config->setRules([
+        '@PSR12' => true,
+        'array_syntax' => ['syntax' => 'short'],
+        'ordered_imports' => ['sort_algorithm' => 'alpha'],
+        'no_unused_imports' => true,
+        'trailing_comma_in_multiline' => true,
+        'phpdoc_scalar' => true,
+        'binary_operator_spaces' => true,
+        'blank_line_before_statement' => [
+            'statements' => ['break', 'continue', 'declare', 'return', 'throw', 'try'],
+        ],
+    ])
+    ->setFinder($finder);
+```
+
+## 5. Git Workflow & Hooks
+
+### .gitignore
+```gitignore
+/node_modules
+/public/hot
+/public/storage
+/storage/*.key
+/vendor
+.env
+.env.backup
+.env.production
+.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+npm-debug.log
+yarn-error.log
+/.idea
+/.vscode
+/storage/debugbar
+.DS_Store
+Thumbs.db
+/public/build
+/storage/app/public/*
+!/storage/app/public/.gitkeep
+```
+
+### Composer Scripts (composer.json)
+```json
+{
+    "scripts": {
+        "post-autoload-dump": [
+            "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
+            "@php artisan package:discover --ansi"
+        ],
+        "post-update-cmd": [
+            "@php artisan vendor:publish --tag=laravel-assets --ansi --force"
+        ],
+        "post-root-package-install": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ],
+        "post-create-project-cmd": [
+            "@php artisan key:generate --ansi"
+        ],
+        "test": "php artisan test --parallel",
+        "test-filter": "php artisan test --filter",
+        "check-style": "php-cs-fixer fix --using-cache=no --verbose --diff --dry-run",
+        "fix-style": "php-cs-fixer fix --using-cache=no --verbose --diff",
+        "phpstan": "phpstan analyse --memory-limit=1G",
+        "ide-helper": [
+            "@php artisan ide-helper:models --write",
+            "@php artisan ide-helper:generate",
+            "@php artisan ide-helper:meta"
+        ],
+        "fresh": [
+            "@php artisan migrate:fresh --seed",
+            "@php artisan cache:clear",
+            "@php artisan config:clear",
+            "@php artisan route:clear",
+            "@php artisan view:clear"
+        ]
+    }
+}
+```
+
+## 6. CI/CD Pipeline (GitHub Actions for HostitBro)
+
+### .github/workflows/deploy.yml
+```yaml
+name: Deploy to HostitBro
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: task_management_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, pdo_mysql, dom, filter, gd, zip
+    
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+        restore-keys: ${{ runner.os }}-php-
+    
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-progress --no-dev --optimize-autoloader
+    
+    - name: Directory Permissions
+      run: chmod -R 777 storage bootstrap/cache
+    
+    - name: Execute tests
+      env:
+        DB_CONNECTION: mysql
+        DB_HOST: 127.0.0.1
+        DB_PORT: 3306
+        DB_DATABASE: task_management_test
+        DB_USERNAME: root
+        DB_PASSWORD: password
+      run: php artisan test
+    
+    - name: Code Style Check
+      run: composer check-style
+    
+    - name: Static Analysis
+      run: composer phpstan
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+    
+    - name: Install dependencies
+      run: composer install --prefer-dist --no-dev --optimize-autoloader
+    
+    - name: Create deployment archive
+      run: |
+        tar -czf deploy.tar.gz \
+          --exclude='.git' \
+          --exclude='node_modules' \
+          --exclude='.github' \
+          --exclude='tests' \
+          --exclude='storage/logs/*' \
+          --exclude='storage/framework/cache/*' \
+          --exclude='storage/framework/sessions/*' \
+          --exclude='storage/framework/views/*' \
+          .
+    
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.HOST }}
+        username: ${{ secrets.USERNAME }}
+        password: ${{ secrets.PASSWORD }}
+        script: |
+          cd /path/to/your/domain
+          php artisan down
+          wget ${{ secrets.DEPLOY_URL }}/deploy.tar.gz
+          tar -xzf deploy.tar.gz
+          composer install --no-dev --optimize-autoloader
+          php artisan migrate --force
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+          php artisan up
+          rm deploy.tar.gz
+```
+
+## 7. Environment Configuration
+
+### .env.example (HostitBro Optimized)
+```env
+APP_NAME="Task Management"
+APP_ENV=production
+APP_KEY=
+APP_DEBUG=false
+APP_URL=https://yourdomain.com
+
+LOG_CHANNEL=single
+LOG_LEVEL=error
+LOG_DEPRECATIONS_CHANNEL=null
+
+# Database (HostitBro MySQL)
+DB_CONNECTION=mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_DATABASE=your_database_name
+DB_USERNAME=your_database_user
+DB_PASSWORD=your_database_password
+
+# Cache & Session (File-based for shared hosting)
+BROADCAST_DRIVER=log
+CACHE_DRIVER=file
+FILESYSTEM_DISK=local
+QUEUE_CONNECTION=database
+SESSION_DRIVER=file
+SESSION_LIFETIME=120
+
+# Mail Configuration (Use HostitBro SMTP)
+MAIL_MAILER=smtp
+MAIL_HOST=mail.yourdomain.com
+MAIL_PORT=587
+MAIL_USERNAME=noreply@yourdomain.com
+MAIL_PASSWORD=your_email_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="noreply@yourdomain.com"
+MAIL_FROM_NAME="${APP_NAME}"
+
+# Debug (Enable only in development)
+DEBUGBAR_ENABLED=false
+CLOCKWORK_ENABLE=false
+
+# Performance
+APP_TIMEZONE=UTC
+QUEUE_FAILED_DRIVER=database
+```
+
+### .env.local (For Local Development)
+```env
+APP_NAME="Task Management"
+APP_ENV=local
+APP_KEY=
+APP_DEBUG=true
+APP_URL=http://localhost:8000
+
+LOG_CHANNEL=stack
+LOG_LEVEL=debug
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=task_management
+DB_USERNAME=root
+DB_PASSWORD=
+
+CACHE_DRIVER=file
+SESSION_DRIVER=file
+QUEUE_CONNECTION=sync
+
+MAIL_MAILER=log
+
+DEBUGBAR_ENABLED=true
+CLOCKWORK_ENABLE=true
+```
+
+## 8. Server Deployment Scripts
+
+### deploy.sh (Run on Server)
+```bash
+#!/bin/bash
+
+echo "🚀 Deploying Task Management Application"
+
+# Configuration
+DOMAIN_PATH="/home/username/public_html/your-domain"
+BACKUP_DIR="/home/username/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# Create backup
+echo "📦 Creating backup..."
+mkdir -p $BACKUP_DIR
+tar -czf $BACKUP_DIR/backup_$DATE.tar.gz -C $DOMAIN_PATH .
+
+# Pull latest changes
+echo "⬇️ Pulling latest changes..."
+cd $DOMAIN_PATH
+git pull origin main
+
+# Install/Update dependencies
+echo "📦 Installing dependencies..."
+composer install --no-dev --optimize-autoloader
+
+# Clear and cache
+echo "🧹 Clearing caches..."
+php artisan down
+php artisan config:clear
+php artisan cache:clear
+php artisan route:clear
+php artisan view:clear
+
+# Run migrations
+echo "🗄️ Running migrations..."
+php artisan migrate --force
+
+# Optimize for production
+echo "⚡ Optimizing for production..."
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+php artisan event:cache
+
+# Set permissions
+echo "🔒 Setting permissions..."
+chmod -R 755 storage
+chmod -R 755 bootstrap/cache
+
+# Bring application back up
+php artisan up
+
+echo "✅ Deployment completed successfully!"
+echo "🌐 Visit: https://yourdomain.com"
+```
+
+### setup-server.sh (First Time Setup)
+```bash
+#!/bin/bash
+
+echo "🔧 Setting up Laravel on HostitBro Server"
+
+# Check PHP version
+php_version=$(php -r "echo PHP_VERSION;")
+echo "PHP Version: $php_version"
+
+# Check required extensions
+echo "🔍 Checking PHP extensions..."
+required_extensions=(pdo pdo_mysql mbstring xml zip gd curl json fileinfo openssl)
+
+for ext in "${required_extensions[@]}"; do
+    if php -m | grep -q "$ext"; then
+        echo "✅ $ext is installed"
+    else
+        echo "❌ $ext is NOT installed"
+    fi
+done
+
+# Create necessary directories
+echo "📁 Creating directories..."
+mkdir -p storage/logs
+mkdir -p storage/framework/cache
+mkdir -p storage/framework/sessions
+mkdir -p storage/framework/views
+mkdir -p bootstrap/cache
+
+# Set permissions
+echo "🔒 Setting permissions..."
+chmod -R 755 storage
+chmod -R 755 bootstrap/cache
+
+# Install Composer dependencies
+echo "📦 Installing Composer dependencies..."
+composer install --no-dev --optimize-autoloader
+
+# Generate app key
+echo "🔑 Generating application key..."
+php artisan key:generate
+
+# Create symbolic link for storage
+echo "🔗 Creating storage link..."
+php artisan storage:link
+
+# Run initial migration
+echo "🗄️ Setting up database..."
+php artisan migrate
+
+# Cache configuration
+echo "⚡ Caching configuration..."
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+
+echo "✅ Server setup completed!"
+echo "📝 Don't forget to:"
+echo "   1. Configure your .env file with correct database credentials"
+echo "   2. Set up your domain to point to the public directory"
+echo "   3. Configure SSL certificate"
+echo "   4. Set up cron jobs for scheduled tasks"
+```
+
+## 9. Team Development Workflow
+
+### Local Development Setup
+```bash
+# Clone repository
+git clone https://github.com/your-username/task-management.git
+cd task-management
+
+# Copy local environment
+cp .env.local .env
+
+# Install dependencies
+composer install
+npm install
+
+# Generate key and setup database
+php artisan key:generate
+php artisan migrate
+php artisan db:seed
+
+# Start development server
+php artisan serve
+```
+
+### Branch Strategy
+- `main` - Production code (auto-deploys to server)
+- `develop` - Development integration branch
+- `feature/task-name` - Individual feature branches
+- `hotfix/issue-name` - Production hotfixes
+
+### Development Commands
+```bash
+# Code quality checks
+composer check-style      # Check code formatting
+composer fix-style        # Fix code formatting
+composer phpstan          # Static analysis
+composer test             # Run tests
+
+# Laravel helpers
+composer fresh            # Fresh migration with seeds
+composer ide-helper       # Generate IDE helper files
+
+# Asset compilation
+npm run dev              # Development build
+npm run build           # Production build
+npm run watch           # Watch for changes
+```
+
+## 10. Cron Jobs Setup (HostitBro cPanel)
+
+### Add to cron jobs in cPanel:
+```bash
+# Run every minute for scheduled tasks
+* * * * * cd /home/username/public_html/your-domain && php artisan schedule:run >> /dev/null 2>&1
+
+# Clean up logs weekly
+0 0 * * 0 cd /home/username/public_html/your-domain && php artisan log:clear
+
+# Queue worker (if using database queues)
+* * * * * cd /home/username/public_html/your-domain && php artisan queue:work --stop-when-empty
+```
+
+## 11. Performance Optimization for Shared Hosting
+
+### config/database.php optimizations
+```php
+'mysql' => [
+    'driver' => 'mysql',
+    'url' => env('DATABASE_URL'),
+    'host' => env('DB_HOST', '127.0.0.1'),
+    'port' => env('DB_PORT', '3306'),
+    'database' => env('DB_DATABASE', 'forge'),
+    'username' => env('DB_USERNAME', 'forge'),
+    'password' => env('DB_PASSWORD', ''),
+    'unix_socket' => env('DB_SOCKET', ''),
+    'charset' => 'utf8mb4',
+    'collation' => 'utf8mb4_unicode_ci',
+    'prefix' => '',
+    'prefix_indexes' => true,
+    'strict' => true,
+    'engine' => null,
+    'options' => extension_loaded('pdo_mysql') ? array_filter([
+        PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
+        PDO::ATTR_PERSISTENT => true,  // Connection pooling
+        PDO::ATTR_TIMEOUT => 30,       // Connection timeout
+    ]) : [],
+],
+```
+
+### Quick Start Commands
+```bash
+# Server setup (first time)
+chmod +x setup-server.sh
+./setup-server.sh
+
+# Deploy updates
+chmod +x deploy.sh
+./deploy.sh
+
+# Local development
+php artisan serve
+npm run dev
+```

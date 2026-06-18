@@ -1,0 +1,20 @@
+includes:
+    - ./vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app/
+        -routes/
+        -resources/
+
+    level: 5  # Lower level for shared hosting compatibility
+
+    ignoreErrors:
+        - '#PHPDoc tag @var#'
+        
+
+    excludePaths:
+        - ./*/*/FileToBeExcluded.php
+
+    checkMissingIterableValueType: false
+    reportUnmatchedIgnoredErrors: false
