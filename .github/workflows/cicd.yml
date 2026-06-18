@@ -78,7 +78,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            cd /home/your-user/public_html/your-project
+            cd /home/digista3/task.digistat.shop
 
             git pull origin main
 
